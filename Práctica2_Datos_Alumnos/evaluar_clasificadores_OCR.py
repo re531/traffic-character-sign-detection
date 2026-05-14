@@ -69,10 +69,7 @@ def pad_to_square(img_gray):
 def cargar_datos_ocr(ruta_directorio, img_size=(25, 25)):
     """
     Lee las carpetas de entrenamiento/validación.
-    Se asume que dentro de ruta_directorio hay subcarpetas con los nombres de las clases
-    (e.g., 'A', 'B', 'C', ..., '0', '1').
 
-    Devuelve un diccionario { 'A': [img1, img2...], 'B': [...] }
     """
     images_dict = {}
     archivos_procesados = 0
@@ -84,7 +81,7 @@ def cargar_datos_ocr(ruta_directorio, img_size=(25, 25)):
         # El nombre del último directorio es la clase (el caracter)
         char_class = os.path.basename(root)
 
-        # Si no es un caracter válido (ej. la propia carpeta raíz), saltar
+        # Si no es un caracter válido, saltar
         if len(char_class) != 1:
             continue
 
@@ -114,13 +111,13 @@ def cargar_datos_ocr(ruta_directorio, img_size=(25, 25)):
                 if bg_intensity > 127:
                     img_gray = 255 - img_gray
 
-                # Umbralización automática mediante Otsu
+                # Umbralización mediante Otsu
                 _, thresh = cv2.threshold(
                     img_gray, 0, 255,
                     cv2.THRESH_BINARY + cv2.THRESH_OTSU
                 )
 
-                # Buscar el contorno principal del carácter
+                # Buscar contorno principal caracter
                 contornos, _ = cv2.findContours(
                     thresh,
                     cv2.RETR_EXTERNAL,
@@ -161,8 +158,8 @@ def cargar_datos_ocr(ruta_directorio, img_size=(25, 25)):
 def mostrar_errores_frecuentes(gt_labels, predicted_labels, ocr_model, top_n=15):
     """
     Muestra los pares de caracteres que más se confunden.
-    Es más fácil de interpretar que una matriz de confusión completa con muchas clases.
-    """
+
+        """
     errores = []
 
     for real, pred in zip(gt_labels, predicted_labels):
@@ -174,14 +171,12 @@ def mostrar_errores_frecuentes(gt_labels, predicted_labels, ocr_model, top_n=15)
     contador = Counter(errores)
 
     print("\nErrores más frecuentes:")
-    print("----------------------------------------")
-
     if len(contador) == 0:
         print("No se han encontrado errores.")
         return
 
     for (real_char, pred_char), num in contador.most_common(top_n):
-        print(f"{real_char} -> {pred_char}: {num} veces")
+        print(f"{real_char} - {pred_char}: {num} veces")
 
 
 def evaluar_por_grupos(gt_labels, predicted_labels, ocr_model):
@@ -205,7 +200,6 @@ def evaluar_por_grupos(gt_labels, predicted_labels, ocr_model):
             grupos["Mayúsculas"].append((real, pred))
 
     print("\nAccuracy por grupos:")
-    print("----------------------------------------")
 
     for nombre_grupo, valores in grupos.items():
         if len(valores) == 0:
@@ -238,14 +232,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # 1) Cargar las imágenes de entrenamiento
+    # 1. Cargar las imágenes de entrenamiento
     train_dict = cargar_datos_ocr(args.train_path)
 
-    # 2) Cargar datos de validación
+    # 2. Cargar datos de validación
     validation_dict = cargar_datos_ocr(args.validation_path)
 
     # Inicializar el clasificador
-    print(f"Inicializando clasificador {args.classifier}...")
+    print(f"Inicializando {args.classifier}")
 
     if args.classifier == "LDA_Bayes":
         ocr_model = LdaNormalBayesClassifier(ocr_char_size=(25, 25))
@@ -257,18 +251,18 @@ if __name__ == "__main__":
         print("Clasificador no reconocido. Usando LDA_Bayes por defecto.")
         ocr_model = LdaNormalBayesClassifier(ocr_char_size=(25, 25))
 
-    # 3) Entrenar clasificador
-    print("Entrenando modelo...")
+    # 3. Entrenar clasificador
+    print("Entrenando modelo")
     ocr_model.train(train_dict)
 
-    # 4) Ejecutar el clasificador sobre los datos de test/validación
-    print("Evaluando validación...")
+    # 4. Ejecutar el clasificador sobre los datos de test/validación
+    print("Evaluando validación")
 
     # Usamos las funciones de la clase base OCRClassifier
     gt_labels = ocr_model.get_labels_dict(validation_dict)
     predicted_labels = ocr_model.predict_dict(validation_dict)
 
-    # 5) Evaluar los resultados
+    # 5. Evaluar los resultados
     accuracy = sklearn.metrics.accuracy_score(gt_labels, predicted_labels)
 
     precision_macro = sklearn.metrics.precision_score(
@@ -313,15 +307,13 @@ if __name__ == "__main__":
         zero_division=0
     )
 
-    print("----------------------------------------")
-    print(f"Accuracy           = {accuracy * 100:.2f}%")
-    print(f"Precision macro    = {precision_macro * 100:.2f}%")
-    print(f"Recall macro       = {recall_macro * 100:.2f}%")
-    print(f"F1 macro           = {f1_macro * 100:.2f}%")
-    print(f"Precision weighted = {precision_weighted * 100:.2f}%")
-    print(f"Recall weighted    = {recall_weighted * 100:.2f}%")
-    print(f"F1 weighted        = {f1_weighted * 100:.2f}%")
-    print("----------------------------------------")
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    print(f"Precision macro: {precision_macro * 100:.2f}%")
+    print(f"Recall macro: {recall_macro * 100:.2f}%")
+    print(f"F1 macro: {f1_macro * 100:.2f}%")
+    print(f"Precision weighted: {precision_weighted * 100:.2f}%")
+    print(f"Recall weighted: {recall_weighted * 100:.2f}%")
+    print(f"F1 weighted: {f1_weighted * 100:.2f}%")
 
     mostrar_errores_frecuentes(gt_labels, predicted_labels, ocr_model, top_n=15)
 
