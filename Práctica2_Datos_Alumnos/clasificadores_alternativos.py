@@ -8,11 +8,9 @@ from sklearn.ensemble import RandomForestClassifier
 from ocr_classifier import OCRClassifier
 
 class BasePixelClassifier(OCRClassifier):
-    """
-    Clase padre (Diseño Orientado a Objetos). 
-    Se encarga únicamente de extraer las características visuales (los píxeles)
-    para que las clases hijas no tengan que repetir este código.
-    """
+    #Clase padre de la que heredan los otros clasificadores para no repetir código.
+    #Coge la imagen, binariza, recorta y aplana los 25x25 píxeles.
+
     def extraer_caracteristicas(self, img):
         if len(img.shape) == 3:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -32,15 +30,14 @@ class BasePixelClassifier(OCRClassifier):
         roi_resized = cv2.resize(roi, self.ocr_char_size)
         return roi_resized.flatten()
 
-# ==========================================
-# ALTERNATIVA 1: PCA + KNN
-# ==========================================
+
+#1: PCA + KNN
 class PcaKnnClassifier(BasePixelClassifier):
     def __init__(self, ocr_char_size=(25, 25)):
         super().__init__(ocr_char_size)
-        # Reductor PCA (nos quedamos con 50 componentes principales)
+        # Reducimos los 625 píxeles a las 50 características principales
         self.reductor = PCA(n_components=50) 
-        # Clasificador KNN mirando los 3 vecinos más cercanos
+        # Clasificamos mirando los 3 vecinos más parecidos
         self.classifier = KNeighborsClassifier(n_neighbors=3)
 
     def train(self, images_dict):
@@ -54,9 +51,8 @@ class PcaKnnClassifier(BasePixelClassifier):
         X = np.array(X_list, dtype=np.float32)
         y = np.array(y_list, dtype=np.int32)
 
-        # Entrenamos PCA y reducimos los datos a la vez
+        # Entrenamos la reducción PCA
         X_reducido = self.reductor.fit_transform(X) 
-        # Entrenamos el KNN con los datos reducidos
         self.classifier.fit(X_reducido, y)
         return X, y
 
@@ -64,17 +60,15 @@ class PcaKnnClassifier(BasePixelClassifier):
         vector = self.extraer_caracteristicas(img)
         vector_matrix = np.array([vector], dtype=np.float32)
         vector_reducido = self.reductor.transform(vector_matrix)
-        # sklearn devuelve un array, sacamos el primer valor con [0]
         return int(self.classifier.predict(vector_reducido)[0])
 
-# ==========================================
-# ALTERNATIVA 2: LDA + RANDOM FOREST
-# ==========================================
+#2: LDA + RANDOM FOREST
+
 class LdaRandomForestClassifier(BasePixelClassifier):
     def __init__(self, ocr_char_size=(25, 25)):
         super().__init__(ocr_char_size)
         self.reductor = LinearDiscriminantAnalysis()
-        # Random Forest con 100 árboles de decisión
+        # En vez de un árbol, usamos 100 para que vote la mayoría
         self.classifier = RandomForestClassifier(n_estimators=100, random_state=42)
 
     def train(self, images_dict):
