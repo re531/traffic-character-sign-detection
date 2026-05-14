@@ -283,7 +283,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--detector',   type=str, default="LdaNormalBayes")
     parser.add_argument('--train_path', default="./train_ocr")
-    parser.add_argument('--test_path',  default="./IMÁGENES_PANELES/test_ocr_panels")
+    parser.add_argument('--test_path',  default="./test_ocr_panels")
     args = parser.parse_args()
 
     print("Entrenando el OCR...")
