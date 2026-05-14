@@ -303,7 +303,7 @@ if __name__ == "__main__":
                     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
                     if img is not None:
-                        print(f"\n--- Analizando: {archivo} ---")
+                        
                         texto_reconocido = leer_panel(img, clf, debug=True)
                         h, w = img.shape[:2]
                         f_out.write(f"{archivo};0;0;{w};{h};PANEL;1.0;{texto_reconocido}\n")

@@ -74,7 +74,7 @@ def cargar_datos_ocr(ruta_directorio, img_size=(25, 25)):
     images_dict = {}
     archivos_procesados = 0
 
-    print(f"Cargando datos desde {ruta_directorio}...")
+    print(f"Cargando datos desde {ruta_directorio}")
 
     # Recorrer subdirectorios
     for root, dirs, files in os.walk(ruta_directorio):
