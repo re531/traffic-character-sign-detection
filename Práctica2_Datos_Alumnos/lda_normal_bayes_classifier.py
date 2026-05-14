@@ -5,7 +5,7 @@
 import cv2
 import numpy as np
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from ocr_classifier import OCRClassifier # Ojo: he quitado el '.' inicial para que importe bien si están en la misma carpeta
+from ocr_classifier import OCRClassifier 
 
 class LdaNormalBayesClassifier(OCRClassifier):
     """

@@ -8,9 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 from ocr_classifier import OCRClassifier
 
 class BasePixelClassifier(OCRClassifier):
-    #Clase padre de la que heredan los otros clasificadores para no repetir código.
-    #Coge la imagen, binariza, recorta y aplana los 25x25 píxeles.
-
+    #Clase padre de la que heredan los otros clasificadores.
     def extraer_caracteristicas(self, img):
         if len(img.shape) == 3:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -63,7 +61,6 @@ class PcaKnnClassifier(BasePixelClassifier):
         return int(self.classifier.predict(vector_reducido)[0])
 
 #2: LDA + RANDOM FOREST
-
 class LdaRandomForestClassifier(BasePixelClassifier):
     def __init__(self, ocr_char_size=(25, 25)):
         super().__init__(ocr_char_size)
