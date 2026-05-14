@@ -30,10 +30,7 @@ class LdaNormalBayesClassifier(OCRClassifier):
         else:
             gray = img
 
-        # Umbralización (según el PDF: cv2.adaptiveThreshold)
-        # Ojo: como las letras del dataset suelen ser blancas sobre negro o viceversa,
-        # puede que necesitemos invertir. Asumimos texto blanco sobre fondo negro
-        # Si el dataset es texto negro sobre fondo blanco, usamos THRESH_BINARY_INV
+        # Umbralización 
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
         # Buscar contornos
@@ -48,7 +45,6 @@ class LdaNormalBayesClassifier(OCRClassifier):
             # Si falla, usamos la imagen umbralizada entera
             roi = thresh
 
-        # Redimensionar al tamaño fijo (25x25)
         roi_resized = cv2.resize(roi, self.ocr_char_size)
         
         # Aplanar a vector de 1D de 625 columnas
@@ -66,30 +62,24 @@ class LdaNormalBayesClassifier(OCRClassifier):
 
         # Extraer características para cada imagen
         for char_class, list_of_imgs in images_dict.items():
-            # Convertimos el caracter (ej: 'A') a una etiqueta numérica (ej: 11)
+            # Convertimos el caracter a etiqueta numerica
             label = self.char2label(char_class) 
             for img in list_of_imgs:
                 vector = self.extraer_caracteristicas(img)
                 X_list.append(vector)
                 y_list.append(label)
 
-        # Matriz C (características) y Vector E (etiquetas)
         X = np.array(X_list, dtype=np.float32)
-        y = np.array(y_list, dtype=np.int32) # OpenCV necesita int32 para las etiquetas
+        y = np.array(y_list, dtype=np.int32) #int32 para las etiquetas
 
         # 1. Reducción de Dimensionalidad (LDA)
-        # sklearn usa float64 por defecto, le pasamos X directamente.
-        # fit() encuentra la matriz de proyección.
         self.lda.fit(X, y)
         
-        # transform() proyecta C en el espacio de dimensión menor (CR)
         X_reducido = self.lda.transform(X)
 
         # 2. Entrenar el clasificador
-        # OpenCV's NormalBayesClassifier requiere float32 para los datos
         X_reducido_cv = np.array(X_reducido, dtype=np.float32)
         
-        # Entrenamos el clasificador
         self.classifier.train(X_reducido_cv, cv2.ml.ROW_SAMPLE, y)
 
         return X, y
