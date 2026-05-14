@@ -6,9 +6,7 @@ import random
 from collections import defaultdict
 from lda_normal_bayes_classifier import LdaNormalBayesClassifier
 
-
 def pad_to_square(img_gray):
-    """Añade bordes negros para hacer la imagen cuadrada sin deformarla."""
     h, w = img_gray.shape
     if h == w:
         return img_gray
@@ -21,6 +19,13 @@ def pad_to_square(img_gray):
         pad_bottom = w - h - pad_top
         return cv2.copyMakeBorder(img_gray, pad_top, pad_bottom, 0, 0, cv2.BORDER_CONSTANT, value=0)
 
+def extract_roi_with_margin(img, x, y, w, h, margin_ratio=0.08):
+    margin = int(h * margin_ratio) + 1
+    x1 = max(0, x - margin)
+    y1 = max(0, y - margin)
+    x2 = min(img.shape[1], x + w + margin)
+    y2 = min(img.shape[0], y + h + margin)
+    return img[y1:y2, x1:x2]
 
 def cargar_datos(ruta, img_size=(25, 25)):
     images_dict = defaultdict(list)
@@ -31,27 +36,25 @@ def cargar_datos(ruta, img_size=(25, 25)):
                 filepath = os.path.join(root, archivo)
                 char_class = os.path.basename(root)
                 img_gray = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
-
+                
                 if img_gray is not None:
-                    bg_intensity = np.median([img_gray[0, 0], img_gray[0, -1], img_gray[-1, 0], img_gray[-1, -1]])
+                    bg_intensity = np.median([img_gray[0,0], img_gray[0,-1], img_gray[-1,0], img_gray[-1,-1]])
                     if bg_intensity > 127:
                         img_gray = 255 - img_gray
-
+                        
                     _, thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     if cnts:
                         c = max(cnts, key=cv2.contourArea)
                         x, y, w, h = cv2.boundingRect(c)
                         if w > 0 and h > 0:
-                            roi_gray = img_gray[y:y + h, x:x + w]
+                            roi_gray = extract_roi_with_margin(img_gray, x, y, w, h)
                             roi_gray = cv2.normalize(roi_gray, None, 0, 255, cv2.NORM_MINMAX)
-                            # Square Padding en entrenamiento
                             roi_padded = pad_to_square(roi_gray)
                             roi_25x25 = cv2.resize(roi_padded, img_size, interpolation=cv2.INTER_AREA)
                             images_dict[char_class].append(roi_25x25)
                             archivos_encontrados += 1
     return dict(images_dict)
-
 
 def detectar_mascara_panel(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -70,7 +73,6 @@ def detectar_mascara_panel(img):
         return mask_filled
     return mask
 
-
 def nms_caracteres(caracteres, iou_thresh=0.20):
     if not caracteres: return []
     caracteres = sorted(caracteres, key=lambda c: c['w'] * c['h'], reverse=True)
@@ -80,8 +82,6 @@ def nms_caracteres(caracteres, iou_thresh=0.20):
         area1 = c1['w'] * c1['h']
         for c2 in keep:
             area2 = c2['w'] * c2['h']
-
-            # --- ¡ERROR CORREGIDO AQUÍ! ---
             x1 = max(c1['x'], c2['x'])
             y1 = max(c1['y'], c2['y'])
             x2 = min(c1['x'] + c1['w'], c2['x'] + c2['w'])
@@ -99,7 +99,6 @@ def nms_caracteres(caracteres, iou_thresh=0.20):
             keep.append(c1)
     return keep
 
-
 def leer_panel(img, clf, debug=True):
     img_h, img_w = img.shape[:2]
     img_area = img_h * img_w
@@ -110,11 +109,11 @@ def leer_panel(img, clf, debug=True):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     gray_eq = clahe.apply(gray)
-
+    
     b, g, r = cv2.split(img)
     r_eq = clahe.apply(r)
 
-    min_h_ref = max(8, int(img_h * 0.02))
+    min_h_ref = max(8, int(img_h * 0.015))
     max_h_ref = int(img_h * 0.50)
     min_area_ref = max(15, img_area * 0.00008)
     max_area_ref = img_area * 0.10
@@ -126,13 +125,16 @@ def leer_panel(img, clf, debug=True):
             x, y, w, h = cv2.boundingRect(c)
             if h == 0: continue
             asp = w / float(h)
-
-            # FILTRO DE SOLIDEZ (EXTENT): Elimina flechas
+            
             area_contorno = cv2.contourArea(c)
             extent = area_contorno / float(w * h)
-
-            if (min_area_ref < w * h < max_area_ref) and (0.1 < asp < 1.4) and (min_h_ref < h < max_h_ref) and (
-                    extent > 0.28):
+            
+            hull = cv2.convexHull(c)
+            hull_area = cv2.contourArea(hull)
+            if hull_area == 0: continue
+            solidity = area_contorno / float(hull_area)
+            
+            if (min_area_ref < w*h < max_area_ref) and (0.08 < asp < 1.4) and (min_h_ref < h < max_h_ref) and (extent > 0.28):
                 validos += 1
         return validos
 
@@ -158,32 +160,34 @@ def leer_panel(img, clf, debug=True):
     for c in contours:
         x, y, w, h = cv2.boundingRect(c)
         if h == 0: continue
-
+        
         aspect_ratio = w / float(h)
-        cx, cy = int(x + w / 2), int(y + h / 2)
+        cx, cy = int(x + w/2), int(y + h/2)
 
         if tiene_panel and mask_panel[cy, cx] == 0: continue
-        if not (min_area_ref < w * h < max_area_ref): continue
-        if not (0.1 < aspect_ratio < 1.4): continue
+        if not (min_area_ref < w*h < max_area_ref): continue
+        if not (0.08 < aspect_ratio < 1.4): continue
         if not (min_h_ref < h < max_h_ref): continue
 
-        # APLICACIÓN FINAL DEL FILTRO EXTENT PARA ELIMINAR FLECHAS
         area_contorno = cv2.contourArea(c)
         extent = area_contorno / float(w * h)
-        if extent < 0.28:
-            continue  # Es una flecha o ruido, lo ignoramos.
+        hull = cv2.convexHull(c)
+        hull_area = cv2.contourArea(hull)
+        if hull_area == 0: continue
+        solidity = area_contorno / float(hull_area)
+        
+        if extent < 0.28 or solidity < 0.38: 
+            continue 
 
-        roi_gray = gray[y:y + h, x:x + w]
-        if roi_gray.std() < 10: continue
+        roi_gray = extract_roi_with_margin(gray, x, y, w, h)
+        if roi_gray.size == 0 or roi_gray.std() < 10: continue
 
         roi_gray = cv2.normalize(roi_gray, None, 0, 255, cv2.NORM_MINMAX)
-
-        # PADDING Y RESIZE PARA EL CLASIFICADOR
         roi_padded = pad_to_square(roi_gray)
         roi_25x25 = cv2.resize(roi_padded, (25, 25), interpolation=cv2.INTER_AREA)
 
         caracteres_raw.append({
-            'x': x, 'y': y, 'w': w, 'h': h,
+            'x': x, 'y': y, 'w': w, 'h': h, 
             'roi_clasificador': roi_25x25,
             'center_x': cx, 'center_y': cy
         })
@@ -214,10 +218,9 @@ def leer_panel(img, clf, debug=True):
             if abs(dx) < 1: continue
             m = (p2['center_y'] - p1['center_y']) / dx
             if abs(m) > 0.35: continue
-
+            
             c_recta = p1['center_y'] - m * p1['center_x']
-            inliers = [c for c in chars_restantes if
-                       abs(m * c['center_x'] - c['center_y'] + c_recta) / np.sqrt(m ** 2 + 1) < distancia_max]
+            inliers = [c for c in chars_restantes if abs(m * c['center_x'] - c['center_y'] + c_recta) / np.sqrt(m**2 + 1) < distancia_max]
 
             if len(inliers) > len(mejor_inliers):
                 mejor_inliers = inliers
@@ -227,15 +230,36 @@ def leer_panel(img, clf, debug=True):
         chars_restantes = [c for c in chars_restantes if c not in mejor_inliers]
 
     lineas.extend([[c] for c in chars_restantes])
+
+    lineas_limpias = []
+    for linea in lineas:
+        linea.sort(key=lambda c: c['center_x'])
+        
+        if len(linea) == 1:
+            continue
+            
+        linea_filtrada = []
+        for i, char in enumerate(linea):
+            dist_izq = (char['center_x'] - linea[i-1]['center_x']) if i > 0 else float('inf')
+            dist_der = (linea[i+1]['center_x'] - char['center_x']) if i < len(linea)-1 else float('inf')
+            
+            dist_minima = min(dist_izq, dist_der)
+            
+            if dist_minima < char['h'] * 4.0:
+                linea_filtrada.append(char)
+                
+        if len(linea_filtrada) >= 2:
+            lineas_limpias.append(linea_filtrada)
+            
+    lineas = lineas_limpias
+
     lineas.sort(key=lambda l: np.mean([c['center_y'] for c in l]))
 
     texto_final = ""
     img_debug = img.copy()
 
     for i, linea in enumerate(lineas):
-        linea.sort(key=lambda c: c['center_x'])
         texto_linea = ""
-
         for char in linea:
             pred = clf.predict(char['roi_clasificador'])
             letra = clf.label2char(pred)
@@ -243,7 +267,7 @@ def leer_panel(img, clf, debug=True):
 
             if debug:
                 x, y, w, h = char['x'], char['y'], char['w'], char['h']
-                cv2.rectangle(img_debug, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.rectangle(img_debug, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 cv2.putText(img_debug, letra, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
         texto_final += texto_linea + ("+" if i < len(lineas) - 1 else "")
@@ -255,12 +279,11 @@ def leer_panel(img, clf, debug=True):
 
     return texto_final
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--detector', type=str, default="LdaNormalBayes")
+    parser.add_argument('--detector',   type=str, default="LdaNormalBayes")
     parser.add_argument('--train_path', default="./train_ocr")
-    parser.add_argument('--test_path', default="./IMÁGENES_PANELES/test_ocr_panels")
+    parser.add_argument('--test_path',  default="./IMÁGENES_PANELES/test_ocr_panels")
     args = parser.parse_args()
 
     print("Entrenando el OCR...")
@@ -270,7 +293,7 @@ if __name__ == "__main__":
 
     fichero_salida = os.path.join(args.test_path, "resultado.txt")
     print("\nProcesando paneles... ¡PULSA ESPACIO PARA PASAR DE IMAGEN!")
-
+    
     with open(fichero_salida, "w", encoding="utf-8") as f_out:
         for root, _, archivos in sorted(os.walk(args.test_path)):
             for archivo in sorted(archivos):
