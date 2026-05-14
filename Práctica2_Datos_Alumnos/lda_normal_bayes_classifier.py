@@ -47,7 +47,6 @@ class LdaNormalBayesClassifier(OCRClassifier):
 
         roi_resized = cv2.resize(roi, self.ocr_char_size)
         
-        # Aplanar a vector de 1D de 625 columnas
         vector = roi_resized.flatten()
         return vector
 
@@ -98,7 +97,7 @@ class LdaNormalBayesClassifier(OCRClassifier):
         vector_reducido = self.lda.transform(vector_matrix)
         vector_reducido_cv = np.array(vector_reducido, dtype=np.float32)
 
-        # Predecir con Bayes
+        # Predecir 
         _, results = self.classifier.predict(vector_reducido_cv)
         
         # results es una matriz, sacamos el valor escalar

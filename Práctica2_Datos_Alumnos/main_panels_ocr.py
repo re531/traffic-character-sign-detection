@@ -286,13 +286,13 @@ if __name__ == "__main__":
     parser.add_argument('--test_path',  default="./test_ocr_panels")
     args = parser.parse_args()
 
-    print("Entrenando el OCR...")
+    print("Entrenando el OCR")
     train_dict = cargar_datos(args.train_path, img_size=(25, 25))
     clf = LdaNormalBayesClassifier()
     clf.train(train_dict)
 
     fichero_salida = os.path.join(args.test_path, "resultado.txt")
-    print("\nProcesando paneles... ¡PULSA ESPACIO PARA PASAR DE IMAGEN!")
+    print("\nProcesando los paneles, pulsar espacio para mostrar otra imagen")
     
     with open(fichero_salida, "w", encoding="utf-8") as f_out:
         for root, _, archivos in sorted(os.walk(args.test_path)):
@@ -309,4 +309,4 @@ if __name__ == "__main__":
                         f_out.write(f"{archivo};0;0;{w};{h};PANEL;1.0;{texto_reconocido}\n")
 
     cv2.destroyAllWindows()
-    print(f"\n¡Resultados guardados exitosamente en {fichero_salida}!")
+    print(f"\nResultados en {fichero_salida}")

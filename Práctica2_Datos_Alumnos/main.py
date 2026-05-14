@@ -5,15 +5,12 @@ import numpy as np
 import random
 from collections import defaultdict
 
-# Importamos tu detector de la Práctica 1
 from detector_paneles import DetectorPaneles
-# Importamos el clasificador ganador de la Práctica 2
 from clasificadores_alternativos import LdaRandomForestClassifier
 
 def agrupar_en_lineas(detecciones):
     """Agrupa caracteres en líneas según su posición vertical (coordenada Y)."""
     if not detecciones: return []
-    # Ordenamos por Y para procesar de arriba a abajo
     detecciones.sort(key=lambda d: d['y'])
     lineas = []
     while detecciones:
@@ -21,12 +18,10 @@ def agrupar_en_lineas(detecciones):
         linea_actual = [base]
         restantes = []
         for d in detecciones:
-            # Tolerancia del 70% de la altura para agrupar en el mismo renglón
             if abs(d['centro_y'] - base['centro_y']) < (base['h'] * 0.7):
                 linea_actual.append(d)
             else:
                 restantes.append(d)
-        # Ordenamos la línea de izquierda a derecha
         linea_actual.sort(key=lambda d: d['x'])
         lineas.append(linea_actual)
         detecciones = restantes
@@ -40,10 +35,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 1. INICIALIZACIÓN
-    print(">>> Cargando Detector (MSER)...")
+    print("Cargando Detector")
     detector = DetectorPaneles() 
 
-    print(">>> Entrenando OCR (Random Forest)...")
+    print("Entrenando OCR")
     images_dict = defaultdict(list)
     for root, _, archivos in os.walk(args.train_ocr_path):
         char_class = os.path.basename(root)
@@ -69,7 +64,7 @@ if __name__ == "__main__":
             img_orig = cv2.imread(ruta_completa)
             if img_orig is None: continue
 
-            # Paso A: Buscar paneles (Práctica 1)
+            # buscar paneles
             detecciones_paneles = detector.detectar(img_orig)
             img_visual = img_orig.copy()
 
@@ -77,7 +72,7 @@ if __name__ == "__main__":
                 x1, y1, x2, y2 = [int(v) for v in det['box']]
                 score = det.get('score', 1.0)
 
-                # Paso B: Recortar panel (con seguridad de bordes)
+                # Recortar panel
                 h_o, w_o = img_orig.shape[:2]
                 rx1, ry1 = max(0, x1), max(0, y1)
                 rx2, ry2 = min(w_o, x2), min(h_o, y2)
@@ -85,9 +80,8 @@ if __name__ == "__main__":
                 
                 if panel_crop.size == 0: continue
 
-                # Paso C: OCR del panel (Inversión y Detección de letras)
                 gray = cv2.cvtColor(panel_crop, cv2.COLOR_BGR2GRAY)
-                # Invertimos: el azul oscuro pasa a ser claro para que el OCR lea bien
+                # Invertimos, el azul oscuro pasa a ser claro para que el OCR lea bien
                 gray_inv = cv2.bitwise_not(gray) 
                 
                 thresh = cv2.adaptiveThreshold(gray_inv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
@@ -104,7 +98,7 @@ if __name__ == "__main__":
                     if px < 4 or py < 4 or (px+pw) > (w_p-4) or (py+ph) > (h_p-4): continue
                     if ph >= 10 and 30 < (pw*ph) < (h_p*w_p*0.1) and 0.2 < (ph/float(pw)) < 5.0:
                         
-                        # Padding para que el modelo no se asuste con recortes pegados
+                        # Padding 
                         pad = 5
                         y_p1, y_p2 = max(0, py-pad), min(h_p, py+ph+pad)
                         x_p1, x_p2 = max(0, px-pad), min(w_p, px+pw+pad)
@@ -119,14 +113,11 @@ if __name__ == "__main__":
                             'txt': char_pred
                         })
 
-                # Paso D: Agrupar y Generar String
                 lineas = agrupar_en_lineas(letras_panel)
                 texto_final = "+".join(["".join([l['txt'] for l in lin]) for lin in lineas])
 
-                # Guardar en resultado.txt (Formato Ejercicio 4)
                 f_out.write(f"{nombre_img};{x1};{y1};{x2};{y2};1;{score:.3f};{texto_final}\n")
 
-                # Paso E: Visualización (Requisitos del PDF)
                 if args.visualize_ocr:
                     # Rectángulo del panel (Rojo)
                     cv2.rectangle(img_visual, (x1, y1), (x2, y2), (0, 0, 255), 2)
@@ -147,11 +138,8 @@ if __name__ == "__main__":
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
             cv2.imwrite(os.path.join("resultado_imgs", nombre_img), img_visual)
-            print(f" -> {nombre_img} procesada.")
 
             if args.visualize_ocr:
                 cv2.imshow("Ejercicio 4: Sistema Completo", img_visual)
                 if cv2.waitKey(0) == 27: args.visualize_ocr = False
-
     cv2.destroyAllWindows()
-    print("\n>>> ¡Práctica completada! Revisa resultado.txt y la carpeta resultado_imgs.")
